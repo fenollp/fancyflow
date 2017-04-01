@@ -1,15 +1,16 @@
 {application, fancyflow,
- [{description, "An OTP library"},
+ [{description, "Experimental library to bring pipe and maybe operator equivalents in Erlang"},
   {vsn, "0.1.0"},
   {registered, []},
   {applications,
    [kernel,
     stdlib
+    %,syntax_tools % <- only required at compile time
    ]},
   {env,[]},
   {modules, []},
 
-  {maintainers, []},
-  {licenses, []},
+  {maintainers, ["Fred Hebert"]},
+  {licenses, ["BSD"]},
   {links, []}
  ]}.
