@@ -1,0 +1,1 @@
+-compile({parse_transform, fancyflow_trans}).
