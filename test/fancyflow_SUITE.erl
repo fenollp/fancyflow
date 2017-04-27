@@ -5,8 +5,9 @@
 -compile(export_all).
 
 all() ->
-    [pipe, maybe,
-     pipe_trans, maybe_trans].
+    [pipe, maybe, parallel,
+     pipe_trans, maybe_trans, parallel_trans,
+     mixed_trans].
 
 pipe(_) ->
     ?assertEqual(3,
@@ -29,6 +30,18 @@ maybe(_) ->
                      fun(_) -> {error, third_clause} end,
                      fun(N) -> {ok, N+0} end
                   ])).
+
+parallel(_) ->
+    ?assertMatch([{ok, 1},
+                  {ok, 2},
+                  {error, {badarith, _}},
+                  {ok, 4}],
+                 fancyflow:parallel([
+                    fun() -> timer:sleep(150), 1 end,
+                    fun() -> 1+1 end,
+                    fun() -> 3/(2-2) end,
+                    fun() -> erlang:'+'(2,2) end
+                 ])).
 
 pipe_trans(_) ->
     _ = fun(X) -> id(X) end,
@@ -58,3 +71,34 @@ maybe_trans(_) ->
 
 id(X) -> X.
 ok_id(X) -> {ok,X}.
+
+parallel_trans(_) ->
+    ?assertMatch([{ok, 1},
+                  {ok, 2},
+                  {error, {badarith, _}},
+                  {ok, 4}],
+                 [parallel](
+                    begin timer:sleep(150), 1 end,
+                    1+1,
+                    3/(2-2),
+                    erlang:'+'(2,2)
+                 )).
+
+mixed_trans(_) ->
+    ?assertMatch({error, {badarith, _}},
+                 [maybe](0,
+                         hd([parallel](_+1, _+2)),
+                         hd(tl([parallel](_+1, _+2/(1-1)))),
+                         hd([parallel](_+1, _+2))
+                        )),
+    ?assertMatch(10,
+                 [pipe](0,
+                        _+1,  % 1
+                        _+2,  % 3
+                        [maybe](_,  % <- 3
+                                {ok, _+3},   % 6
+                                {error, _+1} % 7
+                        ),    % 7
+                        element(2,_)+3 % 10
+                 )).
+

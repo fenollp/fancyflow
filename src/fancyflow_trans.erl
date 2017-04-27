@@ -24,11 +24,26 @@ transform({call, Line,
     {call, Line,
      {remote, Line, {atom, CLine, fancyflow}, {atom, CLine, maybe}},
      [Init, rework_funs(Funs, CLine, create_var())]};
+transform({call, Line,
+           {cons, CLine, {atom, CLine, parallel}, {nil, CLine}},
+           Funs}) ->
+    {call, Line,
+     {remote, Line, {atom, CLine, fancyflow}, {atom, CLine, parallel}},
+     [rework_funs(Funs, CLine)]};
 transform(Term) ->
     Term.
 
 create_var() ->
     binary_to_atom(iolist_to_binary(io_lib:format("_~p", [make_ref()])), utf8).
+
+rework_funs([], Line) ->
+    {nil, Line};
+rework_funs([F|Funs], Line) ->
+    {cons, Line,
+     {'fun', Line, {clauses,
+        [{clause, Line, [], [], [erl_syntax:revert(F)]}]
+     }},
+     rework_funs(Funs, Line)}.
 
 rework_funs([], Line, _) ->
     {nil, Line};
