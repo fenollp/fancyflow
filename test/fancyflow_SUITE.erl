@@ -1,7 +1,7 @@
 -module(fancyflow_SUITE).
 -include_lib("common_test/include/ct.hrl").
 -include_lib("eunit/include/eunit.hrl").
--compile({parse_transform, fancyflow_trans}).
+-include("fancyflow.hrl").
 -compile(export_all).
 
 all() ->

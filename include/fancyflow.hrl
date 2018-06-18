@@ -1,1 +1,1 @@
--compile({parse_transform, fancyflow_trans}).
+-compile({parse_transform, fancyflow}).

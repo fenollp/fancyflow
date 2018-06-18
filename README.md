@@ -8,7 +8,7 @@ It's a toy, but I'm open to feedback.
 Usage
 -----
 
-Add the `fancyflow_trans` to your modules or applications, and use any of the control flow functions:
+Add the `fancyflow` to your modules or applications, and use any of the control flow functions:
 
 ```erlang
 [pipe](InitialState, Exp1, Exp2, ..., ExpN)
@@ -25,7 +25,7 @@ For example:
 -export([sans_pipe/0, pipe/0,
          sans_maybe/0, maybe/0]).
 
--compile({parse_transform, fancyflow_trans}).
+-compile({parse_transform, fancyflow}).
 
 -spec sans_pipe() -> string().
 sans_pipe() ->
