@@ -12,6 +12,12 @@
             ,fname :: atom()
             }).
 
+-ifdef(fun_stacktrace).
+-define(WITH_STACKTRACE(E,T,ST), E:T -> ST = erlang:get_stacktrace(),).
+-else.
+-define(WITH_STACKTRACE(E,T,ST), E:T:ST ->).
+-endif.
+
 %%====================================================================
 %% Parse Transform
 %%====================================================================
@@ -148,7 +154,7 @@ futurize(F, Ref, ReplyTo) ->
         try {ok, F()}
         catch
             throw:Val -> {ok, Val};
-            error:Reason -> {error, {Reason, erlang:get_stacktrace()}};
+            ?WITH_STACKTRACE(error, Reason, ST) {error, {Reason, ST}};
             exit:Reason -> {error, Reason}
         end}
     end.
