@@ -4,7 +4,7 @@
 
 %% API exports
 -export([parse_transform/2]).
--export([pipe/2, maybe/2, parallel/1]).
+-export([maybe/2, parallel/1]).
 
 -type op_kind() :: mapper | folder.
 -record(op, {kind :: op_kind()
@@ -31,15 +31,7 @@ transform({call, Line,
            {cons, CLine, Operator={_,CLine,_}, {nil,CLine}},
            InitAndFunsOrJustFuns}) when is_list(InitAndFunsOrJustFuns) ->
     Op = op_new(Operator),
-    Operation = op_mixin(Op, Line, CLine),
-    case {Op#op.kind, InitAndFunsOrJustFuns} of
-        {folder, [Init|Funs=[_|_]]} ->
-            NewFuns = folder_funs(Funs, CLine, make_var()),
-            {call, Line, Operation, [Init,NewFuns]};
-        {mapper, Funs=[_|_]} ->
-            NewFuns = mapper_funs(Funs, CLine),
-            {call, Line, Operation, [NewFuns]}
-    end;
+    op_mixin(Op, InitAndFunsOrJustFuns, Line, CLine);
 transform(Term) ->
     Term.
 
@@ -49,15 +41,37 @@ op_new({atom,_,parallel}) -> #op{kind=mapper, mname=?MODULE, fname=parallel};
 op_new({tuple, _, [{atom,_,K}, {atom,_,M}, {atom,_,F}]}) ->
     #op{kind=K, mname=M, fname=F}.
 
-op_mixin(#op{mname=?MODULE, fname=F}, Line, CLine) ->
-    %%TODO: inline at least pipe's lists:fold call here
-    {remote, Line, {atom,CLine,?MODULE}, {atom,CLine,F}};
-op_mixin(#op{mname=M, fname=F}, Line, CLine) ->
-    {remote, Line, {atom,CLine,M}, {atom,CLine,F}}.
+op_mixin(#op{mname=?MODULE, fname=pipe}, InitAndFuns, _, _) ->
+    mixin_pipe(InitAndFuns);
 
-make_var() ->
-    Int = erlang:unique_integer([monotonic, positive]),
-    list_to_atom(lists:flatten(io_lib:format("~s~p", [?MODULE,Int]))).
+%%TODO: inline the rest
+op_mixin(#op{kind=folder, mname=M, fname=F}, [Init|Funs=[_|_]], Line, CLine) ->
+    NewFuns = folder_funs(Funs, CLine),
+    Operation = {remote, Line, {atom,CLine,M}, {atom,CLine,F}},
+    {call, Line, Operation, [Init,NewFuns]};
+
+op_mixin(#op{kind=mapper, mname=M, fname=F}, Funs=[_|_], Line, CLine) ->
+    NewFuns = mapper_funs(Funs, CLine),
+    Operation = {remote, Line, {atom,CLine,M}, {atom,CLine,F}},
+    {call, Line, Operation, [NewFuns]}.
+
+%% @doc
+%% -spec pipe(State, [fun((State) -> State)]) -> State when
+%%       State :: any().
+%% pipe(Init, [_|_]=Funs) ->
+%%     Apply = fun(F, State) -> F(State) end,
+%%     lists:foldl(Apply, Init, Funs).
+%% @end
+mixin_pipe([Init]) -> Init;
+mixin_pipe([Init|Funs=[_|_]]) ->
+    VarName = make_var(),
+    Replacer = fun(V) -> replace_var(V, VarName) end,
+    A = fun (Piped, Acc) ->
+                L = element(2, Piped),
+                Fun = make_fun(Piped, L, VarName, Replacer),
+                {call, L, Fun, [Acc]}
+        end,
+    lists:foldl(A, Init, Funs).
 
 mapper_funs([], Line) ->
     {nil, Line};
@@ -68,7 +82,8 @@ mapper_funs([F|Funs], Line) ->
      }},
      mapper_funs(Funs, Line)}.
 
-folder_funs(Funs, Line, VarName) ->
+folder_funs(Funs, Line) ->
+    VarName = make_var(),
     Replacer = fun(V) -> replace_var(V, VarName) end,
     folder_funs(Funs, Line, VarName, Replacer).
 
@@ -78,6 +93,10 @@ folder_funs([F|Funs], Line, VarName, Replacer) ->
     NewF = make_fun(F, Line, VarName, Replacer),
     NewFuns = folder_funs(Funs, Line, VarName, Replacer),
     {cons, Line, NewF, NewFuns}.
+
+make_var() ->
+    Int = erlang:unique_integer([monotonic, positive]),
+    list_to_atom(lists:flatten(io_lib:format("~s~p", [?MODULE,Int]))).
 
 make_fun(F, Line, VarName, Replacer) ->
     case erl_syntax_lib:map(Replacer, F) of
@@ -101,14 +120,6 @@ replace_var(Exp, _) ->
 %%====================================================================
 %% Generic & supported pipe-like operators
 %%====================================================================
-
--spec pipe(State, [fun((State) -> State)]) -> State when
-      State :: any().
-pipe(Init, []) -> Init;
-pipe(Init, [_|_]=Funs) ->
-    Apply = fun(F, State) -> F(State) end,
-    lists:foldl(Apply, Init, Funs).
-
 
 -spec maybe(State, [fun((State) -> Return)]) -> Return when
     State :: any(),

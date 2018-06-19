@@ -5,16 +5,11 @@
 -compile(export_all).
 
 all() ->
-    [pipe, maybe, parallel,
-     pipe_trans, maybe_trans, parallel_trans,
-     mixed_trans].
+    [F || {F,1} <- ?MODULE:module_info(exports)]
+        -- [module_info, id, ok_id].
 
-pipe(_) ->
-    ?assertEqual(3,
-                 fancyflow:pipe(0, [
-                     fun(N) -> N + 5 end,
-                     fun(N) -> N - 2 end
-                 ])).
+id(X) -> X.
+ok_id(X) -> {ok,X}.
 
 maybe(_) ->
     ?assertEqual({ok, 3},
@@ -44,12 +39,12 @@ parallel(_) ->
                  ])).
 
 pipe_trans(_) ->
-    _ = fun(X) -> id(X) end,
-    ?assertEqual(3,
-                 [pipe](0,
-                        _ + 5,
+    ?assertEqual(42, [pipe](42)),
+    ?assertEqual(10,
+                 [pipe](2,
+                        3 * _,
                         id(_),
-                        _ - 2
+                        _ + 4
                  )).
 
 maybe_trans(_) ->
@@ -68,9 +63,6 @@ maybe_trans(_) ->
                          {error, third_clause},
                          {ok, _+0}
                   )).
-
-id(X) -> X.
-ok_id(X) -> {ok,X}.
 
 parallel_trans(_) ->
     ?assertMatch([{ok, 1},
