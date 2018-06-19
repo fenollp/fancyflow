@@ -47,37 +47,43 @@ op_new({atom,_,parallel}) -> #op{kind=mapper, mname=?MODULE, fname=parallel};
 op_new({tuple, _, [{atom,_,K}, {atom,_,M}, {atom,_,F}]}) ->
     #op{kind=K, mname=M, fname=F}.
 
-op_mixin(#op{mname=?MODULE, fname=pipe}, InitAndFuns, _, _) ->
-    mixin_pipe(InitAndFuns);
-
+op_mixin(#op{mname=?MODULE, fname=pipe}, InitAndFuns, Line, _) ->
+    mixin_pipe(InitAndFuns, Line);
 %%TODO: inline the rest
 op_mixin(#op{kind=folder, mname=M, fname=F}, [Init|Funs=[_|_]], Line, CLine) ->
     NewFuns = folder_funs(Funs, CLine),
     Operation = {remote, Line, {atom,CLine,M}, {atom,CLine,F}},
     {call, Line, Operation, [Init,NewFuns]};
-
 op_mixin(#op{kind=mapper, mname=M, fname=F}, Funs=[_|_], Line, CLine) ->
     NewFuns = mapper_funs(Funs, CLine),
     Operation = {remote, Line, {atom,CLine,M}, {atom,CLine,F}},
     {call, Line, Operation, [NewFuns]}.
 
 %% @doc
+%% Inlines fancyflows' "pipe" which is defined as:
 %% -spec pipe(State, [fun((State) -> State)]) -> State when
 %%       State :: any().
+%% pipe(Init, []) -> Init;
 %% pipe(Init, [_|_]=Funs) ->
 %%     Apply = fun(F, State) -> F(State) end,
 %%     lists:foldl(Apply, Init, Funs).
 %% @end
-mixin_pipe([Init]) -> Init;
-mixin_pipe([Init|Funs=[_|_]]) ->
-    VarName = make_var(),
-    Replacer = fun(V) -> replace_var(V, VarName) end,
-    A = fun (Piped, Acc) ->
+mixin_pipe([Init], _) -> Init;
+mixin_pipe([Init|Funs=[_|_]], Line) ->
+    F = fun (Piped, {{var,_,LastVarName},Block}) ->
                 L = element(2, Piped),
-                Fun = make_fun(Piped, L, VarName, Replacer),
-                {call, L, Fun, [Acc]}
+                Replacer = fun (T) -> replace_var(T, LastVarName) end,
+                Filled = erl_syntax:revert(
+                           erl_syntax_lib:map(Replacer, Piped)),
+                Var = {var, L, make_var_name()},
+                Match = {match, L, Var, Filled},
+                {Var, [Match|Block]}
         end,
-    lists:foldl(A, Init, Funs).
+    Var0 = {var, Line, make_var_name()},
+    Expr0 = {match, Line, Var0, Init},
+    {LastVar,Exprs} = lists:foldl(F, {Var0,[Expr0]}, Funs),
+    Block = lists:reverse(Exprs, [LastVar]),
+    {block, Line, Block}.
 
 mapper_funs([], Line) ->
     {nil, Line};
@@ -89,7 +95,7 @@ mapper_funs([F|Funs], Line) ->
      mapper_funs(Funs, Line)}.
 
 folder_funs(Funs, Line) ->
-    VarName = make_var(),
+    VarName = make_var_name(),
     Replacer = fun(V) -> replace_var(V, VarName) end,
     folder_funs(Funs, Line, VarName, Replacer).
 
@@ -100,9 +106,9 @@ folder_funs([F|Funs], Line, VarName, Replacer) ->
     NewFuns = folder_funs(Funs, Line, VarName, Replacer),
     {cons, Line, NewF, NewFuns}.
 
-make_var() ->
+make_var_name() ->
     Int = erlang:unique_integer([monotonic, positive]),
-    list_to_atom(lists:flatten(io_lib:format("~s~p", [?MODULE,Int]))).
+    list_to_atom(lists:flatten(io_lib:format("_~s~p", [?MODULE,Int]))).
 
 make_fun(F, Line, VarName, Replacer) ->
     case erl_syntax_lib:map(Replacer, F) of
