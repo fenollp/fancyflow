@@ -49,7 +49,9 @@ op_new({tuple, _, [{atom,_,K}, {atom,_,M}, {atom,_,F}]}) ->
 
 op_mixin(#op{mname=?MODULE, fname=pipe}, InitAndFuns, Line, _) ->
     mixin_pipe(InitAndFuns, Line);
-%%TODO: inline the rest
+op_mixin(#op{mname=?MODULE, fname=maybe}, InitAndFuns, Line, _) ->
+    mixin_maybe(InitAndFuns, Line);
+%%TODO: inline [parallel]
 op_mixin(#op{kind=folder, mname=M, fname=F}, [Init|Funs=[_|_]], Line, CLine) ->
     NewFuns = folder_funs(Funs, CLine),
     Operation = {remote, Line, {atom,CLine,M}, {atom,CLine,F}},
@@ -70,20 +72,52 @@ op_mixin(#op{kind=mapper, mname=M, fname=F}, Funs=[_|_], Line, CLine) ->
 %% @end
 mixin_pipe([Init], _) -> Init;
 mixin_pipe([Init|Funs=[_|_]], Line) ->
-    F = fun (Piped, {{var,_,LastVarName},Block}) ->
-                L = element(2, Piped),
-                Replacer = fun (T) -> replace_var(T, LastVarName) end,
-                Filled = erl_syntax:revert(
-                           erl_syntax_lib:map(Replacer, Piped)),
-                Var = {var, L, make_var_name()},
-                Match = {match, L, Var, Filled},
-                {Var, [Match|Block]}
-        end,
     Var0 = {var, Line, make_var_name()},
     Expr0 = {match, Line, Var0, Init},
-    {LastVar,Exprs} = lists:foldl(F, {Var0,[Expr0]}, Funs),
+    Acc0 = {Var0, [Expr0]},
+    {LastVar,Exprs} = lists:foldl(fun mixin_pipe_fold/2, Acc0, Funs),
     Block = lists:reverse(Exprs, [LastVar]),
     {block, Line, Block}.
+
+mixin_pipe_fold(Piped, {{var,_,LastVarName},Block}) ->
+    L = element(2, Piped),
+    Replacer = fun (T) -> replace_var(T, LastVarName) end,
+    Filled = erl_syntax:revert(
+               erl_syntax_lib:map(Replacer, Piped)),
+    Var = {var, L, make_var_name()},
+    Match = {match, L, Var, Filled},
+    {Var, [Match|Block]}.
+
+mixin_maybe([Init], _) -> Init;
+mixin_maybe([Init|Funs=[_|_]], Line) ->
+    Var0 = {var, Line, make_var_name()},
+    Expr0 = {match, Line, Var0, Init},
+    Block = mixin_maybe_fold(Funs, Var0),
+    {block, Line, [Expr0,Block]}.
+
+mixin_maybe_fold([Piped|Rest], {var,_,LastVarName}) ->
+    L = element(2, Piped),
+    Replacer = fun (T) -> replace_var(T, LastVarName) end,
+    Filled = erl_syntax:revert(
+               erl_syntax_lib:map(Replacer, Piped)),
+
+    ErrorVar = {var, L, make_var_name()},
+    ErrorTuple = {tuple, L, [{atom,L,error},{var,L,'__'}]},
+    ErrorMatch = {match, L, ErrorTuple, ErrorVar},
+    ErrorClause = {clause, L, [ErrorMatch], [], [ErrorVar]},
+
+    OkVar = {var, L, make_var_name()},
+    OkVarMatched = {var, L, make_var_name()},
+    OkTuple = {tuple, L, [{atom,L,ok},OkVarMatched]},
+    OkMatch = {match, L, OkTuple, OkVar},
+    Next = case [] =:= Rest of
+               false -> mixin_maybe_fold(Rest, OkVarMatched);
+               true -> OkVar
+           end,
+    OkClause = {clause, L, [OkMatch], [], [Next]},
+
+    {'case', L, Filled, [ErrorClause,OkClause]}.
+
 
 mapper_funs([], Line) ->
     {nil, Line};
