@@ -140,41 +140,44 @@ mixin_maybe_fold([Piped|Rest], {var,_,LastVarName}) ->
     {'case', L, Filled, [ErrorClause,OkClause]}.
 
 
-mapper_funs([], Line) ->
-    {nil, Line};
-mapper_funs([F|Funs], Line) ->
+mapper_funs([], LastLine) ->
+    {nil, LastLine};
+mapper_funs([Piped|Rest], LastLine) ->
+    Line = element(2, Piped),
     {cons, Line,
      {'fun', Line, {clauses,
-        [{clause, Line, [], [], [erl_syntax:revert(F)]}]
+        [{clause, Line, [], [], [erl_syntax:revert(Piped)]}]
      }},
-     mapper_funs(Funs, Line)}.
+     mapper_funs(Rest, LastLine)}.
 
-folder_funs(Funs, Line) ->
+folder_funs(Pipeds, LastLine) ->
     VarName = make_var_name(),
     Replacer = fun(V) -> replace_var(V, VarName) end,
-    folder_funs(Funs, Line, VarName, Replacer).
+    folder_funs(Pipeds, LastLine, VarName, Replacer).
 
-folder_funs([], Line, _, _) ->
-    {nil, Line};
-folder_funs([F|Funs], Line, VarName, Replacer) ->
-    NewF = make_fun(F, Line, VarName, Replacer),
-    NewFuns = folder_funs(Funs, Line, VarName, Replacer),
-    {cons, Line, NewF, NewFuns}.
+folder_funs([], LastLine, _, _) ->
+    {nil, LastLine};
+folder_funs([Piped|Rest], LastLine, VarName, Replacer) ->
+    Line = element(2, Piped),
+    Filled = make_fun(Piped, Line, VarName, Replacer),
+    io:format(user, "\nFilled ~p\n", [Filled]),
+    NewRest = folder_funs(Rest, LastLine, VarName, Replacer),
+    {cons, Line, Filled, NewRest}.
 
 make_var_name() ->
     Int = erlang:unique_integer([monotonic, positive]),
     list_to_atom(lists:flatten(io_lib:format("_~s~p", [?MODULE,Int]))).
 
-make_fun(F, Line, VarName, Replacer) ->
-    case erl_syntax_lib:map(Replacer, F) of
-        F ->
+make_fun(Piped, Line, VarName, Replacer) ->
+    case erl_syntax_lib:map(Replacer, Piped) of
+        Piped ->
             {'fun', Line, {clauses,
-               [{clause, Line, [], [], [erl_syntax:revert(F)]}]
+               [{clause, Line, [], [], [erl_syntax:revert(Piped)]}]
             }};
-        NewF ->
+        Filled ->
             {'fun', Line, {clauses,
                [{clause, Line, [{var,Line,VarName}], [],
-                [erl_syntax:revert(NewF)]}]
+                [erl_syntax:revert(Filled)]}]
             }}
     end.
 
