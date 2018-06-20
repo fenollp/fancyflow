@@ -8,6 +8,7 @@ all() ->
     [parallel
     ,pipe_trans, maybe_trans, parallel_trans
     ,mixed_trans
+    ,maybe2_trans
     ].
 
 id(X) -> X.
@@ -83,4 +84,29 @@ mixed_trans(_) ->
                          ),    % 7
                         element(2,_)+3 % 10
                        )
+                ).
+
+-define(MYPIPE, {folder, ?MODULE, maybe2}).
+
+maybe2(Init, Funs) ->
+    Switch = fun (F, State) ->
+                     case F(State) of
+                         {ok, NewState} -> NewState;
+                         {error, A, B} -> throw({'$return', A, B})
+                     end
+             end,
+    try {ok, lists:foldl(Switch, Init, Funs)}
+    catch {'$return', A, B} -> {error, A, B}
+    end.
+
+maybe2_trans(_) ->
+    ?assertEqual({ok, 1}, [{folder,?MODULE,maybe2}](0, {ok, _+1})),
+    ?assertEqual({error, third_clause, 0}
+                ,[?MYPIPE](0
+                          ,{ok, _ + 1}
+                          ,{ok, _ - 1}
+                          ,ok_id(_)
+                          ,{error, third_clause, _}
+                          ,{ok, _/42}
+                          )
                 ).

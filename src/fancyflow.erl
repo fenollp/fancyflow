@@ -24,7 +24,10 @@
 
 parse_transform(ASTs, _Options) ->
     try [erl_syntax_lib:map(fun revert_then_transform/1, AST) || AST <- ASTs]
-    catch _E:_R -> ASTs
+    catch
+        ?WITH_STACKTRACE(_E, _R, _ST)
+            io:format(user, "\n~p:~p ~p\n", [_E,_R,_ST]),
+            ASTs
     end.
 
 revert_then_transform(T) ->
@@ -35,9 +38,13 @@ revert_then_transform(T) ->
 %% [{folder,knm_numbers,pipe}](T,F1,F2,F3)
 transform({call, Line,
            {cons, CLine, Operator={_,CLine,_}, {nil,CLine}},
-           InitAndFunsOrJustFuns}) when is_list(InitAndFunsOrJustFuns) ->
-    Op = op_new(Operator),
-    op_mixin(Op, InitAndFunsOrJustFuns, Line, CLine);
+           InitAndFunsOrJustFuns}=Call)
+  when is_list(InitAndFunsOrJustFuns) ->
+    case op_new(Operator) of
+        error -> Call;
+        Op ->
+            op_mixin(Op, InitAndFunsOrJustFuns, Line, CLine)
+    end;
 transform(Term) ->
     Term.
 
@@ -45,7 +52,8 @@ op_new({atom,_,pipe}) -> #op{kind=folder, mname=?MODULE, fname=pipe};
 op_new({atom,_,maybe}) -> #op{kind=folder, mname=?MODULE, fname=maybe};
 op_new({atom,_,parallel}) -> #op{kind=mapper, mname=?MODULE, fname=parallel};
 op_new({tuple, _, [{atom,_,K}, {atom,_,M}, {atom,_,F}]}) ->
-    #op{kind=K, mname=M, fname=F}.
+    #op{kind=K, mname=M, fname=F};
+op_new(_) -> error.
 
 op_mixin(#op{mname=?MODULE, fname=pipe}, InitAndFuns, Line, _) ->
     mixin_pipe(InitAndFuns, Line);
