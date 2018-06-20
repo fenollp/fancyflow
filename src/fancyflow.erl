@@ -4,7 +4,7 @@
 
 %% API exports
 -export([parse_transform/2]).
--export([maybe/2, parallel/1]).
+-export([parallel/1]).
 
 -type op_kind() :: mapper | folder.
 -record(op, {kind :: op_kind()
@@ -88,6 +88,19 @@ mixin_pipe_fold(Piped, {{var,_,LastVarName},Block}) ->
     Match = {match, L, Var, Filled},
     {Var, [Match|Block]}.
 
+%% -spec maybe(State, [fun((State) -> Return)]) -> Return when
+%%     State :: any(),
+%%     Return :: {ok, State} | {error, State}.
+%% maybe(Init, Funs) ->
+%%     Switch = fun (F, State) ->
+%%                      case F(State) of
+%%                          {ok, NewState} -> NewState;
+%%                          {error, Reason} -> throw({'$return', Reason})
+%%                      end
+%%              end,
+%%     try {ok, lists:foldl(Switch, Init, Funs)}
+%%     catch {'$return', Term} -> {error, Term}
+%%     end.
 mixin_maybe([Init], _) -> Init;
 mixin_maybe([Init|Funs=[_|_]], Line) ->
     Var0 = {var, Line, make_var_name()},
@@ -166,20 +179,6 @@ replace_var(Exp, _) ->
 %%====================================================================
 %% Generic & supported pipe-like operators
 %%====================================================================
-
--spec maybe(State, [fun((State) -> Return)]) -> Return when
-    State :: any(),
-    Return :: {ok, State} | {error, State}.
-maybe(Init, Funs) ->
-    try {ok, lists:foldl(fun switch/2, Init, Funs)}
-    catch {'$return', Term} -> {error, Term}
-    end.
-
-switch(F, State) ->
-    case F(State) of
-        {ok, NewState} -> NewState;
-        {error, Reason} -> throw({'$return', Reason})
-    end.
 
 -spec parallel([fun(() -> _)]) -> [{ok, _} | {error, _}].
 parallel(Funs) ->

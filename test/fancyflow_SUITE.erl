@@ -5,26 +5,13 @@
 -compile(export_all).
 
 all() ->
-    [F || {F,1} <- ?MODULE:module_info(exports)]
-        -- [module_info, id, ok_id].
+    [parallel
+    ,pipe_trans, maybe_trans, parallel_trans
+    ,mixed_trans
+    ].
 
 id(X) -> X.
 ok_id(X) -> {ok,X}.
-
-maybe(_) ->
-    ?assertEqual({ok, 3},
-                 fancyflow:maybe(0, [
-                     fun(N) -> {ok, N+1} end,
-                     fun(N) -> {ok, N+1} end,
-                     fun(N) -> {ok, N+1} end
-                 ])),
-    ?assertEqual({error, third_clause},
-                 fancyflow:maybe(0, [
-                     fun(N) -> {ok, N+0} end,
-                     fun(N) -> {ok, N+0} end,
-                     fun(_) -> {error, third_clause} end,
-                     fun(N) -> {ok, N+0} end
-                  ])).
 
 parallel(_) ->
     ?assertMatch([{ok, 1},
@@ -48,16 +35,18 @@ pipe_trans(_) ->
                  )).
 
 maybe_trans(_) ->
-    ?assertEqual({ok, 3},
+    ?assertEqual({ok, 4},
                  [maybe](0,
                          {ok, _+1},
                          ok_id(_),
+                         {ok, _+1},
                          {ok, _+1},
                          ok_id(_),
                          {ok, _+1}
                  )),
     ?assertEqual({error, third_clause},
                  [maybe](0,
+                         {ok, _+0},
                          {ok, _+0},
                          ok_id(_),
                          {error, third_clause},
