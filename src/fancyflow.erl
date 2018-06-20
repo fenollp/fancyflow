@@ -102,7 +102,7 @@ mixin_maybe_fold([Piped|Rest], {var,_,LastVarName}) ->
                erl_syntax_lib:map(Replacer, Piped)),
 
     ErrorVar = {var, L, make_var_name()},
-    ErrorTuple = {tuple, L, [{atom,L,error},{var,L,'__'}]},
+    ErrorTuple = {tuple, L, [{atom,L,error},{var,L,make_var_name()}]},
     ErrorMatch = {match, L, ErrorTuple, ErrorVar},
     ErrorClause = {clause, L, [ErrorMatch], [], [ErrorVar]},
 
