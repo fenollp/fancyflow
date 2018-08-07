@@ -9,6 +9,7 @@ all() ->
     ,pipe_trans, maybe_trans, parallel_trans
     ,mixed_trans
     ,maybe2_trans
+    ,setters_trans
     ].
 
 id(X) -> X.
@@ -110,3 +111,36 @@ maybe2_trans(_) ->
                           ,{ok, _/42}
                           )
                 ).
+
+-record(my_state, {a, b, c, d, e}).
+my_new_state() -> #my_state{}.
+set_a(S=#my_state{}, A) when is_list(A) -> S#my_state{a = A}.
+set_b(S=#my_state{}, B) when is_binary(B) -> S#my_state{b = B}.
+set_c(S=#my_state{}, C) when is_atom(C) -> S#my_state{c = C}.
+set_d(S=#my_state{}, D) when is_float(D) -> S#my_state{d = D}.
+setters_trans(_) ->
+    ?assertError(function_clause
+                ,[pipe](my_new_state()
+                       ,set_d(_, 42)
+                       )
+                ),
+    Expected = #my_state{a = [],
+                         b = <<"bla">>,
+                         c = something,
+                         d = 42.0,
+                         e = undefined
+                        },
+    ?assertEqual(Expected
+                ,[pipe](my_new_state()
+                       ,set_b(_, <<"bla">>)
+                       ,set_a(_, [])
+                       ,set_c(_, something)
+                       ,set_d(_, 42.0)
+                       )
+                ),
+    Setters = [fun (S) -> set_b(S, <<"bla">>) end
+              ,fun (S) -> set_a(S, []) end
+              ,fun (S) -> set_c(S, something) end
+              ,fun (S) -> set_d(S, 42.0) end
+              ],
+    ?assertEqual(Expected, [pipe](my_new_state(), Setters)).

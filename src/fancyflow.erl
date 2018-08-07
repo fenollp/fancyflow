@@ -38,14 +38,17 @@ revert_then_transform(T) ->
 %% [pipe](Var, F1, F2)
 %% [parallel](A,B,C,D)
 %% [{folder,knm_numbers,pipe}](T,F1,F2,F3)
+%% [pipe](T,[F1,F2,F3])
 transform({call, Line,
-           {cons, CLine, Operator={_,CLine,_}, {nil,CLine}},
-           InitAndFunsOrJustFuns}=Call)
-  when is_list(InitAndFunsOrJustFuns) ->
-    case op_new(Operator) of
-        error -> Call;
-        Op ->
-            op_mixin(Op, InitAndFunsOrJustFuns, Line, CLine)
+           {cons, CLine, Operator={_,CLine,_}, {nil,CLine}}, Args}=Call)
+  when is_list(Args) ->
+    case {op_new(Operator), op_args(Args)} of
+        {error,_} -> Call;
+        {_,error} -> Call;
+        {Op,flat_list} ->
+            op_mixin(Op, Args, Line, CLine);
+        {Op=#op{kind=folder},FlattenedArgs=[_|_]} ->
+            op_mixin(Op, FlattenedArgs, Line, CLine)
     end;
 transform(Term) ->
     Term.
@@ -56,6 +59,23 @@ op_new({atom,_,parallel}) -> #op{kind=mapper, mname=?MODULE, fname=parallel};
 op_new({tuple, _, [{atom,_,K}, {atom,_,M}, {atom,_,F}]}) ->
     #op{kind=K, mname=M, fname=F};
 op_new(_) -> error.
+
+op_args([T,C={cons,_,_,_}]) when is_tuple(T) ->
+    try to_flat_list(C) of
+        L -> [T|L]
+    catch error:function_flause ->
+            error
+    end;
+op_args(L=[_|_]) ->
+    case lists:all(fun is_tuple/1, L) of
+        true -> flat_list;
+        false -> error
+    end;
+op_args(_) ->
+    error.
+
+to_flat_list({cons,_,T,{nil,_}}) -> [T];
+to_flat_list({cons,_,T,Rest}) -> [T | to_flat_list(Rest)].
 
 op_mixin(#op{mname=?MODULE, fname=pipe}, InitAndFuns, Line, _) ->
     mixin_pipe(InitAndFuns, Line);
