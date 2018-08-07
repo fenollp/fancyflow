@@ -12,6 +12,10 @@
             ,fname :: atom()
             }).
 
+-define(PREFIX, '_fancyflow').
+-define(PREFIX_MAX, '_fancyflow999999999').
+-define(PREFIX_STR, "_" ?MODULE_STRING).
+
 -ifdef(OTP_RELEASE). %% Implies 21 or higher
 -define(EXCEPTION(Class, Reason, Stacktrace), Class:Reason:Stacktrace).
 -define(STACKTRACE(Stacktrace), Stacktrace).
@@ -91,9 +95,7 @@ mixin_pipe([Init|Funs=[_|_]], Line) ->
 
 mixin_pipe_fold(Piped, {{var,_,LastVarName},Block}) ->
     L = element(2, Piped),
-    Replacer = fun (T) -> replace_var(T, LastVarName) end,
-    Filled = erl_syntax:revert(
-               erl_syntax_lib:map(Replacer, Piped)),
+    Filled = mixin_or_make_fun_then_call(Piped, L, LastVarName),
     Var = {var, L, make_var_name()},
     Match = {match, L, Var, Filled},
     {Var, [Match|Block]}.
@@ -120,9 +122,7 @@ mixin_maybe([Init|Funs=[_|_]], Line) ->
 
 mixin_maybe_fold([Piped|Rest], {var,_,LastVarName}) ->
     L = element(2, Piped),
-    Replacer = fun (T) -> replace_var(T, LastVarName) end,
-    Filled = erl_syntax:revert(
-               erl_syntax_lib:map(Replacer, Piped)),
+    Filled = mixin_or_make_fun_then_call(Piped, L, LastVarName),
 
     ErrorVar = {var, L, make_var_name()},
     ErrorTuple = {tuple, L, [{atom,L,error},{var,L,make_var_name()}]},
@@ -162,13 +162,28 @@ folder_funs([], LastLine, _, _) ->
 folder_funs([Piped|Rest], LastLine, VarName, Replacer) ->
     Line = element(2, Piped),
     Filled = make_fun(Piped, Line, VarName, Replacer),
-    io:format(user, "\nFilled ~p\n", [Filled]),
     NewRest = folder_funs(Rest, LastLine, VarName, Replacer),
     {cons, Line, Filled, NewRest}.
 
-make_var_name() ->
-    Int = erlang:unique_integer([monotonic, positive]),
-    list_to_atom(lists:flatten(io_lib:format("_~s~p", [?MODULE,Int]))).
+%% Hack to know when we may be rebinding a variable
+is_matching({match,_,{var,_,Name},_}) when ?PREFIX < Name, Name < ?PREFIX_MAX -> false;
+is_matching({match,_,{var,_,_},_}) -> true;
+is_matching({_,Ta}) -> is_matching(Ta);
+is_matching({_,_,Ta}) -> is_matching(Ta);
+is_matching({_,_,Ta,Tb}) -> is_matching(Ta) orelse is_matching(Tb);
+is_matching({_,_,Ta,Tb,Tc}) -> is_matching(Ta) orelse is_matching(Tb) orelse is_matching(Tc);
+is_matching(Ts) when is_list(Ts) -> lists:any(fun is_matching/1, Ts);
+is_matching(T) when is_atom(T); is_number(T); is_binary(T) -> false.
+
+mixin_or_make_fun_then_call(Piped, Line, VarName) ->
+    Replacer = fun (T) -> replace_var(T, VarName) end,
+    Filled = erl_syntax:revert(erl_syntax_lib:map(Replacer, Piped)),
+    case is_matching(Piped) of
+        false -> Filled;
+        true ->
+            Clauses = [{clause, Line, [], [], [Filled]}],
+            {call, Line, {'fun', Line, {clauses, Clauses}}, []}
+    end.
 
 make_fun(Piped, Line, VarName, Replacer) ->
     case erl_syntax_lib:map(Replacer, Piped) of
@@ -182,6 +197,10 @@ make_fun(Piped, Line, VarName, Replacer) ->
                 [erl_syntax:revert(Filled)]}]
             }}
     end.
+
+make_var_name() ->
+    Int = erlang:unique_integer([monotonic, positive]),
+    list_to_atom(?PREFIX_STR ++ integer_to_list(Int)).
 
 replace_var({var, Line, '_'}, VarName) ->
     {var, Line, VarName};

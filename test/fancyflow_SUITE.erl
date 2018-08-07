@@ -9,6 +9,7 @@ all() ->
     ,pipe_trans, maybe_trans, parallel_trans
     ,mixed_trans
     ,maybe2_trans
+    ,scoping
     ].
 
 id(X) -> X.
@@ -109,4 +110,12 @@ maybe2_trans(_) ->
                           ,{error, third_clause, _}
                           ,{ok, _/42}
                           )
+                ).
+
+scoping(_) ->
+    ?assertEqual(42, [pipe](1, _*6, _*7)),
+    ?assertEqual(42, [pipe](1
+                           ,begin A = 6, _*A end
+                           ,begin A = 7, _*A end
+                           )
                 ).
