@@ -12,10 +12,12 @@
             ,fname :: atom()
             }).
 
--ifdef(fun_stacktrace).
--define(WITH_STACKTRACE(E,T,ST), E:T -> ST = erlang:get_stacktrace(),).
+-ifdef(OTP_RELEASE). %% Implies 21 or higher
+-define(EXCEPTION(Class, Reason, Stacktrace), Class:Reason:Stacktrace).
+-define(STACKTRACE(Stacktrace), Stacktrace).
 -else.
--define(WITH_STACKTRACE(E,T,ST), E:T:ST ->).
+-define(EXCEPTION(Class, Reason, _), Class:Reason).
+-define(STACKTRACE(_), erlang:get_stacktrace()).
 -endif.
 
 %%====================================================================
@@ -25,8 +27,8 @@
 parse_transform(ASTs, _Options) ->
     try [erl_syntax_lib:map(fun revert_then_transform/1, AST) || AST <- ASTs]
     catch
-        ?WITH_STACKTRACE(_E, _R, _ST)
-            io:format(user, "\n~p:~p ~p\n", [_E,_R,_ST]),
+        ?EXCEPTION(_E, _R, _ST) ->
+            io:format(user, "\n~p:~p ~p\n", [_E,_R,?STACKTRACE(_ST)]),
             ASTs
     end.
 
@@ -204,7 +206,7 @@ futurize(F, Ref, ReplyTo) ->
         try {ok, F()}
         catch
             throw:Val -> {ok, Val};
-            ?WITH_STACKTRACE(error, Reason, ST) {error, {Reason, ST}};
+            ?EXCEPTION(error, Reason, ST) -> {error, {Reason, ?STACKTRACE(ST)}};
             exit:Reason -> {error, Reason}
         end}
     end.
