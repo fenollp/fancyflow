@@ -2,6 +2,9 @@
 
 -include_lib("syntax_tools/include/merl.hrl").
 
+%% :generated -- https://erldocs.com/current/stdlib/erl_anno.html?i=0&search=erl_anno#undefined
+%% https://bugs.erlang.org/browse/ERL-639
+
 %% API exports
 -export([parse_transform/2]).
 -export([parallel/1]).

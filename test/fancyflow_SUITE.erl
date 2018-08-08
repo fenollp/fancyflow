@@ -118,4 +118,13 @@ scoping(_) ->
                            ,begin A = 6, _*A end
                            ,begin A = 7, _*A end
                            )
-                ).
+                ),
+
+    A = 5,
+    Val = 7,
+
+    ?assertEqual(
+       (A - (A+Val)*2) * 3
+      ,[pipe](Val, (fun (_1) -> begin X = A + _1, X*2 end end)(_),
+                   begin X = A - _, X*3 end)
+      ).
