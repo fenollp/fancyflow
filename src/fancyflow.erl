@@ -52,7 +52,13 @@ transform({call, Anno,
     case op_new(Operator) of
         error -> Call;
         Op ->
+<<<<<<< HEAD
             op_mixin(Op, InitAndFunsOrJustFuns, Anno)
+=======
+            R=op_mixin(Op, InitAndFunsOrJustFuns, Line, CLine),
+            io:format(user, "\n~p\n", [R]),
+            R
+>>>>>>> trying to test more + found some old code
     end;
 transform(AST) ->
     AST.
@@ -69,6 +75,7 @@ op_mixin(#op{mname=?MODULE, fname=pipe}, InitAndFuns, Anno) ->
 op_mixin(#op{mname=?MODULE, fname=maybe}, InitAndFuns, Anno) ->
     mixin_maybe(InitAndFuns, Anno);
 %%TODO: inline [parallel]
+<<<<<<< HEAD
 op_mixin(#op{kind=folder, mname=M, fname=F}, [Init|Funs=[_|_]], Anno) ->
     NewFuns = folder_funs(Funs, Anno),
     Operation = {remote, Anno, {atom,Anno,M}, {atom,Anno,F}},
@@ -77,6 +84,17 @@ op_mixin(#op{kind=mapper, mname=M, fname=F}, Funs=[_|_], Anno) ->
     NewFuns = mapper_funs(Funs, Anno),
     Operation = {remote, Anno, {atom,Anno,M}, {atom,Anno,F}},
     {call, Anno, Operation, [NewFuns]}.
+=======
+op_mixin(#op{kind=folder, mname=M, fname=F}, [Init|Funs=[_|_]], Line, CLine) ->
+    NewFuns = folder_funs(Funs, CLine),
+    Operation = {remote, Line, {atom,CLine,M}, {atom,CLine,F}},
+    {call, Line, Operation, [Init,NewFuns]};
+op_mixin(#op{kind=mapper, mname=M, fname=F}, Funs=[_|_], Line, CLine) ->
+    NewFuns = mapper_funs(Funs, CLine),
+    io:format(user, "\nNewFuns = ~p\n", [NewFuns]),
+    Operation = {remote, Line, {atom,CLine,M}, {atom,CLine,F}},
+    {call, Line, Operation, [NewFuns]}.
+>>>>>>> trying to test more + found some old code
 
 %% @doc
 %% Inlines fancyflows' "pipe" which is defined as:
@@ -94,7 +112,12 @@ mixin_pipe([Init|Funs=[_|_]], Anno) ->
     Acc0 = {Var0, [Expr0]},
     {LastVar,Exprs} = lists:foldl(fun mixin_pipe_fold/2, Acc0, Funs),
     Block = lists:reverse(Exprs, [LastVar]),
+<<<<<<< HEAD
     {block, Anno, Block}.
+=======
+    io:format(user, "\nBlock = ~p\n", [Block]),
+    {block, Line, Block}.
+>>>>>>> trying to test more + found some old code
 
 mixin_pipe_fold(Piped, {{var,_,LastVarName},Block}) ->
     Anno = element(2, Piped),
@@ -145,6 +168,7 @@ mixin_maybe_fold([Piped|Rest], {var,_,LastVarName}) ->
     {'case', Anno, Filled, [ErrorClause,OkClause]}.
 
 
+<<<<<<< HEAD
 mapper_funs([], LastAnno) ->
     {nil, LastAnno};
 mapper_funs([Piped|Rest], LastAnno) ->
@@ -154,6 +178,18 @@ mapper_funs([Piped|Rest], LastAnno) ->
         [{clause, Anno, [], [], [erl_syntax:revert(Piped)]}]
      }},
      mapper_funs(Rest, LastAnno)}.
+=======
+mapper_funs([], LastLine) ->
+    {nil, LastLine};
+mapper_funs([Piped|Rest], LastLine) ->
+    Line = element(2, Piped),
+    NewPiped =
+     {'fun', Line, {clauses,
+        [{clause, Line, [], [], [erl_syntax:revert(Piped)]}]
+     }},
+    io:format(user, "\nNewPiped ~p\n", [NewPiped]),
+    {cons, Line, NewPiped, mapper_funs(Rest,LastLine)}.
+>>>>>>> trying to test more + found some old code
 
 folder_funs(Pipeds, LastAnno) ->
     VarName = make_var_name(),
@@ -203,8 +239,25 @@ make_var_name() ->
     Int = erlang:unique_integer([monotonic, positive]),
     list_to_atom(?PREFIX_STR ++ integer_to_list(Int)).
 
+<<<<<<< HEAD
 replace_var({var, Anno, '_'}, VarName) ->
     {var, Anno, VarName};
+=======
+replace_var({var, Line, '_'}, VarName) ->
+    {var, Line, VarName};
+replace_var(List, VarName) when is_list(List) ->
+    [replace_var(X,VarName) || X <- List];
+replace_var(Tuple, VarName) when is_tuple(Tuple) ->
+    list_to_tuple([replace_var(X,VarName) || X <- tuple_to_list(Tuple)]);
+%% replace_var(Map, VarName) when is_map(Map) ->
+%%     maps:from_list([replace_var(X,VarName) || X <- maps:to_list(Map)]);
+replace_var(Atomic, _) when is_number(Atomic); is_atom(Atomic); is_bitstring(Atomic) ->
+    Atomic;
+
+%% replace_var({block, Line, Block}, VarName) ->
+%%     NewBlock = [replace_var(X,VarName) || X <- Block],
+%%     {block, Line, NewBlock};
+>>>>>>> trying to test more + found some old code
 replace_var(Exp, _) ->
     Exp.
 

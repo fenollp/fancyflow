@@ -10,6 +10,7 @@ all() ->
     ,mixed_trans
     ,maybe2_trans
     ,scoping
+    ,exceptions
     ].
 
 id(X) -> X.
@@ -125,6 +126,27 @@ scoping(_) ->
 
     ?assertEqual(
        (A - (A+Val)*2) * 3
+      ,[?MYPIPE](Val, begin X = A + _, X*2 end,
+                      begin X = A - _, X*3 end)
+      ),
+
+    ?assertEqual(
+       [(A+Val)*2, (A-Val)*3]
+      ,[parallel](Val, begin X = A + _, X*2 end,
+                       begin X = A - _, X*3 end)
+      ),
+
+    ?assertEqual(
+       (A - (A+Val)*2) * 3
       ,[pipe](Val, (fun (_1) -> begin X = A + _1, X*2 end end)(_),
                    begin X = A - _, X*3 end)
       ).
+                ).
+
+exceptions(_) ->
+    L0=?LINE, ?assertThrow({badthing,L0}, [pipe](badthing, throw({_,?LINE}))),
+    L1=?LINE, ?assertThrow(L1+1, [pipe]("eh",
+                                        throw(?LINE))),
+    L2=?LINE, ?assertThrow(L2+2, [maybe](<<"wef">>,
+                                         [pipe](_, _, _, _,
+                                                throw(?LINE)))).
