@@ -124,7 +124,7 @@ mixin_maybe([Init|Funs=[_|_]], Line) ->
     {block, Line, [Expr0,Block]}.
 
 mixin_maybe_fold([Piped|Rest], {var,_,LastVarName}) ->
-    L = element(2, Piped),
+    L = erl_anno:set_generated(true, element(2, Piped)),
     Filled = mixin_or_make_fun_then_call(Piped, L, LastVarName),
 
     ErrorVar = {var, L, make_var_name()},
