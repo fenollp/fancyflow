@@ -45,14 +45,14 @@ revert_then_transform(T) ->
 %% [pipe](Var, F1, F2)
 %% [parallel](A,B,C,D)
 %% [{folder,knm_numbers,pipe}](T,F1,F2,F3)
-transform({call, Line,
+transform({call, Anno,
            {cons, _, Operator={_,_,_}, {nil,_}},
            InitAndFunsOrJustFuns}=Call)
   when is_list(InitAndFunsOrJustFuns) ->
     case op_new(Operator) of
         error -> Call;
         Op ->
-            op_mixin(Op, InitAndFunsOrJustFuns, Line)
+            op_mixin(Op, InitAndFunsOrJustFuns, Anno)
     end;
 transform(AST) ->
     AST.
@@ -64,19 +64,19 @@ op_new({tuple, _, [{atom,_,K}, {atom,_,M}, {atom,_,F}]}) ->
     #op{kind=K, mname=M, fname=F};
 op_new(_) -> error.
 
-op_mixin(#op{mname=?MODULE, fname=pipe}, InitAndFuns, Line) ->
-    mixin_pipe(InitAndFuns, Line);
-op_mixin(#op{mname=?MODULE, fname=maybe}, InitAndFuns, Line) ->
-    mixin_maybe(InitAndFuns, Line);
+op_mixin(#op{mname=?MODULE, fname=pipe}, InitAndFuns, Anno) ->
+    mixin_pipe(InitAndFuns, Anno);
+op_mixin(#op{mname=?MODULE, fname=maybe}, InitAndFuns, Anno) ->
+    mixin_maybe(InitAndFuns, Anno);
 %%TODO: inline [parallel]
-op_mixin(#op{kind=folder, mname=M, fname=F}, [Init|Funs=[_|_]], Line) ->
-    NewFuns = folder_funs(Funs, Line),
-    Operation = {remote, Line, {atom,Line,M}, {atom,Line,F}},
-    {call, Line, Operation, [Init,NewFuns]};
-op_mixin(#op{kind=mapper, mname=M, fname=F}, Funs=[_|_], Line) ->
-    NewFuns = mapper_funs(Funs, Line),
-    Operation = {remote, Line, {atom,Line,M}, {atom,Line,F}},
-    {call, Line, Operation, [NewFuns]}.
+op_mixin(#op{kind=folder, mname=M, fname=F}, [Init|Funs=[_|_]], Anno) ->
+    NewFuns = folder_funs(Funs, Anno),
+    Operation = {remote, Anno, {atom,Anno,M}, {atom,Anno,F}},
+    {call, Anno, Operation, [Init,NewFuns]};
+op_mixin(#op{kind=mapper, mname=M, fname=F}, Funs=[_|_], Anno) ->
+    NewFuns = mapper_funs(Funs, Anno),
+    Operation = {remote, Anno, {atom,Anno,M}, {atom,Anno,F}},
+    {call, Anno, Operation, [NewFuns]}.
 
 %% @doc
 %% Inlines fancyflows' "pipe" which is defined as:
@@ -88,19 +88,19 @@ op_mixin(#op{kind=mapper, mname=M, fname=F}, Funs=[_|_], Line) ->
 %%     lists:foldl(Apply, Init, Funs).
 %% @end
 mixin_pipe([Init], _) -> Init;
-mixin_pipe([Init|Funs=[_|_]], Line) ->
-    Var0 = {var, Line, make_var_name()},
-    Expr0 = {match, Line, Var0, Init},
+mixin_pipe([Init|Funs=[_|_]], Anno) ->
+    Var0 = {var, Anno, make_var_name()},
+    Expr0 = {match, Anno, Var0, Init},
     Acc0 = {Var0, [Expr0]},
     {LastVar,Exprs} = lists:foldl(fun mixin_pipe_fold/2, Acc0, Funs),
     Block = lists:reverse(Exprs, [LastVar]),
-    {block, Line, Block}.
+    {block, Anno, Block}.
 
 mixin_pipe_fold(Piped, {{var,_,LastVarName},Block}) ->
-    L = element(2, Piped),
-    Filled = mixin_or_make_fun_then_call(Piped, L, LastVarName),
-    Var = {var, L, make_var_name()},
-    Match = {match, L, Var, Filled},
+    Anno = element(2, Piped),
+    Filled = mixin_or_make_fun_then_call(Piped, Anno, LastVarName),
+    Var = {var, Anno, make_var_name()},
+    Match = {match, Anno, Var, Filled},
     {Var, [Match|Block]}.
 
 %% -spec maybe(State, [fun((State) -> Return)]) -> Return when
@@ -117,56 +117,56 @@ mixin_pipe_fold(Piped, {{var,_,LastVarName},Block}) ->
 %%     catch {'$return', Term} -> {error, Term}
 %%     end.
 mixin_maybe([Init], _) -> Init;
-mixin_maybe([Init|Funs=[_|_]], Line) ->
-    Var0 = {var, Line, make_var_name()},
-    Expr0 = {match, Line, Var0, Init},
+mixin_maybe([Init|Funs=[_|_]], Anno) ->
+    Var0 = {var, Anno, make_var_name()},
+    Expr0 = {match, Anno, Var0, Init},
     Block = mixin_maybe_fold(Funs, Var0),
-    {block, Line, [Expr0,Block]}.
+    {block, Anno, [Expr0,Block]}.
 
 mixin_maybe_fold([Piped|Rest], {var,_,LastVarName}) ->
-    L = erl_anno:set_generated(true, element(2, Piped)),
-    Filled = mixin_or_make_fun_then_call(Piped, L, LastVarName),
+    Anno = erl_anno:set_generated(true, element(2, Piped)),
+    Filled = mixin_or_make_fun_then_call(Piped, Anno, LastVarName),
 
-    ErrorVar = {var, L, make_var_name()},
-    ErrorTuple = {tuple, L, [{atom,L,error},{var,L,make_var_name()}]},
-    ErrorMatch = {match, L, ErrorTuple, ErrorVar},
-    ErrorClause = {clause, L, [ErrorMatch], [], [ErrorVar]},
+    ErrorVar = {var, Anno, make_var_name()},
+    ErrorTuple = {tuple, Anno, [{atom,Anno,error},{var,Anno,make_var_name()}]},
+    ErrorMatch = {match, Anno, ErrorTuple, ErrorVar},
+    ErrorClause = {clause, Anno, [ErrorMatch], [], [ErrorVar]},
 
-    OkVar = {var, L, make_var_name()},
-    OkVarMatched = {var, L, make_var_name()},
-    OkTuple = {tuple, L, [{atom,L,ok},OkVarMatched]},
-    OkMatch = {match, L, OkTuple, OkVar},
+    OkVar = {var, Anno, make_var_name()},
+    OkVarMatched = {var, Anno, make_var_name()},
+    OkTuple = {tuple, Anno, [{atom,Anno,ok},OkVarMatched]},
+    OkMatch = {match, Anno, OkTuple, OkVar},
     Next = case [] =:= Rest of
                false -> mixin_maybe_fold(Rest, OkVarMatched);
                true -> OkVar
            end,
-    OkClause = {clause, L, [OkMatch], [], [Next]},
+    OkClause = {clause, Anno, [OkMatch], [], [Next]},
 
-    {'case', L, Filled, [ErrorClause,OkClause]}.
+    {'case', Anno, Filled, [ErrorClause,OkClause]}.
 
 
-mapper_funs([], LastLine) ->
-    {nil, LastLine};
-mapper_funs([Piped|Rest], LastLine) ->
-    Line = element(2, Piped),
-    {cons, Line,
-     {'fun', Line, {clauses,
-        [{clause, Line, [], [], [erl_syntax:revert(Piped)]}]
+mapper_funs([], LastAnno) ->
+    {nil, LastAnno};
+mapper_funs([Piped|Rest], LastAnno) ->
+    Anno = element(2, Piped),
+    {cons, Anno,
+     {'fun', Anno, {clauses,
+        [{clause, Anno, [], [], [erl_syntax:revert(Piped)]}]
      }},
-     mapper_funs(Rest, LastLine)}.
+     mapper_funs(Rest, LastAnno)}.
 
-folder_funs(Pipeds, LastLine) ->
+folder_funs(Pipeds, LastAnno) ->
     VarName = make_var_name(),
     Replacer = fun(V) -> replace_var(V, VarName) end,
-    folder_funs(Pipeds, LastLine, VarName, Replacer).
+    folder_funs(Pipeds, LastAnno, VarName, Replacer).
 
-folder_funs([], LastLine, _, _) ->
-    {nil, LastLine};
-folder_funs([Piped|Rest], LastLine, VarName, Replacer) ->
-    Line = element(2, Piped),
-    Filled = make_fun(Piped, Line, VarName, Replacer),
-    NewRest = folder_funs(Rest, LastLine, VarName, Replacer),
-    {cons, Line, Filled, NewRest}.
+folder_funs([], LastAnno, _, _) ->
+    {nil, LastAnno};
+folder_funs([Piped|Rest], LastAnno, VarName, Replacer) ->
+    Anno = element(2, Piped),
+    Filled = make_fun(Piped, Anno, VarName, Replacer),
+    NewRest = folder_funs(Rest, LastAnno, VarName, Replacer),
+    {cons, Anno, Filled, NewRest}.
 
 %% Hack to know when we may be rebinding a variable
 is_matching({match,_,{var,_,Name},_}) when ?PREFIX < Name, Name < ?PREFIX_MAX -> false;
@@ -178,35 +178,33 @@ is_matching({_,_,Ta,Tb,Tc}) -> is_matching(Ta) orelse is_matching(Tb) orelse is_
 is_matching(Ts) when is_list(Ts) -> lists:any(fun is_matching/1, Ts);
 is_matching(T) when is_atom(T); is_number(T); is_binary(T) -> false.
 
-mixin_or_make_fun_then_call(Piped, Line, VarName) ->
+mixin_or_make_fun_then_call(Piped, Anno, VarName) ->
     Replacer = fun (T) -> replace_var(T, VarName) end,
     Filled = erl_syntax:revert(erl_syntax_lib:map(Replacer, Piped)),
     case is_matching(Piped) of
         false -> Filled;
         true ->
-            Clauses = [{clause, Line, [], [], [Filled]}],
-            {call, Line, {'fun', Line, {clauses, Clauses}}, []}
+            Clauses = [{clause, Anno, [], [], [Filled]}],
+            {call, Anno, {'fun', Anno, {clauses, Clauses}}, []}
     end.
 
-make_fun(Piped, Line, VarName, Replacer) ->
+make_fun(Piped, Anno, VarName, Replacer) ->
     case erl_syntax_lib:map(Replacer, Piped) of
         Piped ->
-            {'fun', Line, {clauses,
-               [{clause, Line, [], [], [erl_syntax:revert(Piped)]}]
-            }};
+            Clauses = [{clause, Anno, [], [], [erl_syntax:revert(Piped)]}],
+            {'fun', Anno, {clauses,Clauses}};
         Filled ->
-            {'fun', Line, {clauses,
-               [{clause, Line, [{var,Line,VarName}], [],
-                [erl_syntax:revert(Filled)]}]
-            }}
+            Clauses = [{clause, Anno, [{var,Anno,VarName}], [],
+                        [erl_syntax:revert(Filled)]}],
+            {'fun', Anno, {clauses,Clauses}}
     end.
 
 make_var_name() ->
     Int = erlang:unique_integer([monotonic, positive]),
     list_to_atom(?PREFIX_STR ++ integer_to_list(Int)).
 
-replace_var({var, Line, '_'}, VarName) ->
-    {var, Line, VarName};
+replace_var({var, Anno, '_'}, VarName) ->
+    {var, Anno, VarName};
 replace_var(Exp, _) ->
     Exp.
 
