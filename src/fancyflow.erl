@@ -46,16 +46,16 @@ revert_then_transform(T) ->
 %% [parallel](A,B,C,D)
 %% [{folder,knm_numbers,pipe}](T,F1,F2,F3)
 transform({call, Line,
-           {cons, CLine, Operator={_,CLine,_}, {nil,CLine}},
+           {cons, _, Operator={_,_,_}, {nil,_}},
            InitAndFunsOrJustFuns}=Call)
   when is_list(InitAndFunsOrJustFuns) ->
     case op_new(Operator) of
         error -> Call;
         Op ->
-            op_mixin(Op, InitAndFunsOrJustFuns, Line, CLine)
+            op_mixin(Op, InitAndFunsOrJustFuns, Line)
     end;
-transform(Term) ->
-    Term.
+transform(AST) ->
+    AST.
 
 op_new({atom,_,pipe}) -> #op{kind=folder, mname=?MODULE, fname=pipe};
 op_new({atom,_,maybe}) -> #op{kind=folder, mname=?MODULE, fname=maybe};
@@ -64,18 +64,18 @@ op_new({tuple, _, [{atom,_,K}, {atom,_,M}, {atom,_,F}]}) ->
     #op{kind=K, mname=M, fname=F};
 op_new(_) -> error.
 
-op_mixin(#op{mname=?MODULE, fname=pipe}, InitAndFuns, Line, _) ->
+op_mixin(#op{mname=?MODULE, fname=pipe}, InitAndFuns, Line) ->
     mixin_pipe(InitAndFuns, Line);
-op_mixin(#op{mname=?MODULE, fname=maybe}, InitAndFuns, Line, _) ->
+op_mixin(#op{mname=?MODULE, fname=maybe}, InitAndFuns, Line) ->
     mixin_maybe(InitAndFuns, Line);
 %%TODO: inline [parallel]
-op_mixin(#op{kind=folder, mname=M, fname=F}, [Init|Funs=[_|_]], Line, CLine) ->
-    NewFuns = folder_funs(Funs, CLine),
-    Operation = {remote, Line, {atom,CLine,M}, {atom,CLine,F}},
+op_mixin(#op{kind=folder, mname=M, fname=F}, [Init|Funs=[_|_]], Line) ->
+    NewFuns = folder_funs(Funs, Line),
+    Operation = {remote, Line, {atom,Line,M}, {atom,Line,F}},
     {call, Line, Operation, [Init,NewFuns]};
-op_mixin(#op{kind=mapper, mname=M, fname=F}, Funs=[_|_], Line, CLine) ->
-    NewFuns = mapper_funs(Funs, CLine),
-    Operation = {remote, Line, {atom,CLine,M}, {atom,CLine,F}},
+op_mixin(#op{kind=mapper, mname=M, fname=F}, Funs=[_|_], Line) ->
+    NewFuns = mapper_funs(Funs, Line),
+    Operation = {remote, Line, {atom,Line,M}, {atom,Line,F}},
     {call, Line, Operation, [NewFuns]}.
 
 %% @doc
