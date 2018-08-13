@@ -1,6 +1,6 @@
 {application, fancyflow,
- [{description, "Experimental library to bring pipe and maybe operator equivalents in Erlang"},
-  {vsn, "0.1.0"},
+ [{description, "Experimental library to bring pipe and maybe operator equivalents to Erlang"},
+  {vsn, "0.2.0"},
   {registered, []},
   {applications,
    [kernel,

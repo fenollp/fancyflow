@@ -4,7 +4,7 @@
          sans_parallel/0, parallel/0,
          nested/0]).
 
--compile({parse_transform, fancyflow_trans}).
+-compile({parse_transform, fancyflow}).
 
 -spec sans_pipe() -> string().
 sans_pipe() ->
