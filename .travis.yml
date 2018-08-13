@@ -1,0 +1,9 @@
+sudo: false
+language: erlang
+otp_release:
+- 21.0
+- 20.3
+script:
+- rebar3 local upgrade
+- export PATH=/home/travis/.cache/rebar3/bin:$PATH
+- rebar3 ct
