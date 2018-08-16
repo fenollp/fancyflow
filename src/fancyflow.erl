@@ -52,7 +52,9 @@ transform({call, Anno,
     case op_new(Operator) of
         error -> Call;
         Op ->
-            op_mixin(Op, InitAndFunsOrJustFuns, Anno)
+            R=op_mixin(Op, InitAndFunsOrJustFuns, Anno),
+            io:format(user, "\nR ~p\n", [R]),
+            R
     end;
 transform(AST) ->
     AST.

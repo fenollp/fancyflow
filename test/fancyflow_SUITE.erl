@@ -10,6 +10,7 @@ all() ->
     ,mixed_trans
     ,maybe2_trans
     ,scoping
+    ,lines
     ].
 
 id(X) -> X.
@@ -125,6 +126,33 @@ scoping(_) ->
 
     ?assertEqual(
        (A - (A+Val)*2) * 3
-      ,[pipe](Val, (fun (_1) -> begin X = A + _1, X*2 end end)(_),
-                   begin X = A - _, X*3 end)
+      ,[pipe](Val
+             ,(fun (_1) -> begin X = A + _1, X*2 end end)(_)
+             ,begin X = A - _, X*3 end
+             )
+    %%   ),
+
+    %% ?assertEqual(
+    %%    {ok, (A - (A+Val)*2) * 3}
+    %%   ,[?MYPIPE](Val, begin X = A + _, X*2, {ok,X} end,
+    %%                   begin X = A - _, X*3, {ok,X} end)
+    %%   ),
+
+    %% ?assertEqual(
+    %%    [(A+Val)*2, (A-Val)*3]
+    %%   ,[parallel](Val, begin X = A + _, X*2 end,
+    %%                    begin X = A - _, X*3 end)
       ).
+
+lines(_) ->
+    L0=?LINE, ?assertThrow({badthing,L0}, [pipe](badthing, throw({_,?LINE}))),
+    ?assert(is_integer(L0) andalso L0 > 0),
+    %% L1=?LINE, ?assertMatch(L1+1, [pipe]("eh",
+    %%                                     throw(?LINE))),
+    L1=?LINE, ?assertThrow({"eh",L1+1}, [pipe]("eh",
+                                               throw({_,?LINE}))),
+    ?assert(L0 + 2 == L1),
+    L2=?LINE, ?assertThrow(L2+2, [maybe](<<"wef">>,
+                                         [pipe](_, _, _, _,
+                                                throw(?LINE)))),
+    ?assert(L1 + 6 == L2).
